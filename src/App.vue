@@ -10,6 +10,7 @@ const { session, ready, authError, signOut } = useAuth()
 
 const navItems = [
   { path: '/', label: "Today's Habits", icon: '🌿' },
+  { path: '/calendar', label: 'Calendar', icon: '📅' },
   { path: '/dashboard', label: 'Dashboard', icon: '📊' },
   { path: '/badges', label: 'Badges', icon: '🏅' }
 ]

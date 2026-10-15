@@ -1,21 +1,25 @@
 import { ref, computed, watch } from 'vue'
-import type { Habit } from '../types'
+import type { Habit, HabitInput } from '../types'
 import { supabase } from '../lib/supabase'
-import { localDate, streaks } from '../lib/habitDates'
+import { localDate } from '../lib/habitDates'
+import { EVERY_DAY, scheduledOn, scheduledStreaks, dayProgress } from '../lib/habitSchedule'
 import { useAuth } from './useAuth'
 
 interface HabitRow {
   id: string; user_id: string; name: string; icon: string; category: Habit['category'];
   color: string; created_at: string; completed_dates: string[];
+  scheduled_days?: number[]; schedule_history?: { from: string; days: number[] }[];
   reminder: string | null; reminder_enabled: boolean
 }
 function fromRow(row: HabitRow): Habit {
-  return {
+  const habit = {
     id: row.id, name: row.name, icon: row.icon, category: row.category, color: row.color,
     createdAt: row.created_at, completedDates: row.completed_dates,
     reminder: row.reminder?.slice(0, 5), reminderEnabled: row.reminder_enabled,
-    ...streaks(row.completed_dates)
+    scheduledDays: row.scheduled_days ?? [...EVERY_DAY],
+    scheduleHistory: row.schedule_history ?? [],
   }
+  return { ...habit, ...scheduledStreaks(habit) }
 }
 const habits = ref<Habit[]>([])
 const loading = ref(false)
@@ -80,12 +84,12 @@ function replaceRow(row: HabitRow, userId: string, request: number) {
 // One reminder timer for the whole app, rather than one per mounted view.
 setInterval(() => {
   today.value = localDate()
-  habits.value = habits.value.map(h => ({ ...h, ...streaks(h.completedDates) }))
+  habits.value = habits.value.map(h => ({ ...h, ...scheduledStreaks(h) }))
   if (!session.value || !('Notification' in window) || Notification.permission !== 'granted') return
   const now = new Date()
   const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
   habits.value.forEach(h => {
-    if (h.reminderEnabled && h.reminder === time && !h.completedDates.includes(today.value)) {
+    if (scheduledOn(h, today.value) && h.reminderEnabled && h.reminder === time && !h.completedDates.includes(today.value)) {
       new Notification('HabitFlow 🌿', { body: `Don't forget: ${h.icon} ${h.name}` })
     }
   })
@@ -96,9 +100,9 @@ window.addEventListener('focus', () => {
 })
 
 export function useHabits() {
-  const todayHabits = computed(() => habits.value.map(h => ({ ...h, completedToday: h.completedDates.includes(today.value) })))
+  const todayHabits = computed(() => habits.value.filter(h => scheduledOn(h, today.value)).map(h => ({ ...h, completedToday: h.completedDates.includes(today.value) })))
   const completedToday = computed(() => todayHabits.value.filter(h => h.completedToday).length)
-  const totalToday = computed(() => habits.value.length)
+  const totalToday = computed(() => todayHabits.value.length)
   const completionRate = computed(() => totalToday.value ? Math.round(completedToday.value / totalToday.value * 100) : 0)
   const longestStreak = computed(() => habits.value.reduce((max, h) => Math.max(max, h.bestStreak), 0))
   const weeklyStats = computed(() => {
@@ -108,26 +112,39 @@ export function useHabits() {
       const d = new Date(`${current}T12:00:00`)
       d.setDate(d.getDate() - (6 - index))
       const date = localDate(d)
-      const completed = habits.value.filter(h => h.completedDates.includes(date)).length
-      return { date, label: d.toLocaleDateString('en', { weekday: 'short' }), rate: totalToday.value ? Math.round(completed / totalToday.value * 100) : 0 }
+      return { date, label: d.toLocaleDateString('en', { weekday: 'short' }), ...dayProgress(habits.value, date) }
     })
   })
 
   function toggleHabit(id: string) {
+    const habit = habits.value.find(h => h.id === id)
+    if (!habit || !scheduledOn(habit, localDate())) return Promise.resolve(false)
     return mutate(async (userId, request) => {
       const { data, error } = await supabase!.rpc('toggle_habit', { habit_id: id, completion_date: localDate() }).single()
       if (error || !data) throw error ?? new Error('Habit not found')
       replaceRow(data as HabitRow, userId, request)
     })
   }
-  function addHabit(input: { name: string; icon: string; category: Habit['category']; color: string; reminder?: string; reminderEnabled: boolean }) {
+  function addHabit(input: HabitInput) {
     return mutate(async (userId, request) => {
       const { data, error } = await supabase!.from('habits').insert({
         user_id: userId, name: input.name.trim(), icon: input.icon, category: input.category,
-        color: input.color, created_at: localDate(), reminder: input.reminder || null, reminder_enabled: input.reminderEnabled
+        color: input.color, created_at: localDate(), reminder_enabled: false, scheduled_days: input.scheduledDays,
+        schedule_history: [{ from: localDate(), days: input.scheduledDays }]
       }).select().single()
       if (error) throw error
       if (session.value?.user.id === userId && request === generation) habits.value.push(fromRow(data as HabitRow))
+    })
+  }
+  function updateHabit(id: string, input: HabitInput) {
+    return mutate(async (userId, request) => {
+      const { data, error } = await supabase!.rpc('edit_habit', {
+        habit_id: id, habit_name: input.name.trim(), habit_icon: input.icon,
+        habit_category: input.category, habit_color: input.color,
+        habit_days: input.scheduledDays, effective_date: localDate()
+      }).single()
+      if (error || !data) throw error ?? new Error('Habit not found')
+      replaceRow(data as HabitRow, userId, request)
     })
   }
   function deleteHabit(id: string) {
@@ -147,5 +164,5 @@ export function useHabits() {
     })
   }
   return { habits, todayHabits, completedToday, totalToday, completionRate, longestStreak, weeklyStats,
-    loading, loaded, saving, error, loadHabits, toggleHabit, addHabit, deleteHabit, updateReminder }
+    loading, loaded, saving, error, loadHabits, toggleHabit, addHabit, deleteHabit, updateReminder, updateHabit, today }
 }

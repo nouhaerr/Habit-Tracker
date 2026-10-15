@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import type { Habit } from '../types'
+import type { Habit, HabitInput } from '../types'
+import { EVERY_DAY, WEEKDAYS } from '../lib/habitSchedule'
 
-defineProps<{ busy?: boolean; saveError?: string }>()
+const props = defineProps<{ habit?: Habit; busy?: boolean; saveError?: string }>()
 
 const emit = defineEmits<{
-  add: [data: { name: string; icon: string; category: Habit['category']; color: string; reminderEnabled: boolean }]
+  add: [data: HabitInput]
   close: []
 }>()
 
@@ -25,19 +26,25 @@ const PRESET_HABITS = [
 const ICONS = ['💻','💧','🧘','📚','🏃','🌸','🔍','✏️','🎯','😴','🍎','☕','🎵','🌿','⚡','🦋','🌊','🏋️','🧠','💡']
 const COLORS = ['#6B8CFF','#60C5F1','#A8D8B9','#B8A9E8','#F4A89A','#FFD07B','#FF9F9F','#98D8C8','#C5A3FF','#FFB347']
 
-const tab = ref<'preset' | 'custom'>('preset')
-const name = ref('')
-const icon = ref('💻')
-const category = ref<Habit['category']>('dev')
-const color = ref('#6B8CFF')
+const tab = ref<'preset' | 'custom'>(props.habit ? 'custom' : 'preset')
+const name = ref(props.habit?.name ?? '')
+const icon = ref(props.habit?.icon ?? '💻')
+const category = ref<Habit['category']>(props.habit?.category ?? 'dev')
+const color = ref(props.habit?.color ?? '#6B8CFF')
+const scheduledDays = ref([...(props.habit?.scheduledDays ?? EVERY_DAY)])
+function toggleDay(day: number) {
+  scheduledDays.value = scheduledDays.value.includes(day)
+    ? scheduledDays.value.filter(d => d !== day) : [...scheduledDays.value, day].sort()
+}
 
 function selectPreset(p: typeof PRESET_HABITS[0]) {
-  emit('add', { name: p.name, icon: p.icon, category: p.category, color: color.value, reminderEnabled: false })
+  if (!scheduledDays.value.length) return
+  emit('add', { name: p.name, icon: p.icon, category: p.category, color: color.value, scheduledDays: [...scheduledDays.value] })
 }
 
 function submitCustom() {
-  if (!name.value.trim()) return
-  emit('add', { name: name.value.trim(), icon: icon.value, category: category.value, color: color.value, reminderEnabled: false })
+  if (!name.value.trim() || !scheduledDays.value.length) return
+  emit('add', { name: name.value.trim(), icon: icon.value, category: category.value, color: color.value, scheduledDays: [...scheduledDays.value] })
 }
 </script>
 
@@ -46,17 +53,26 @@ function submitCustom() {
     <div class="overlay" @click.self="!busy && emit('close')">
       <div class="modal" :inert="busy" :aria-busy="busy">
         <div class="modal-header">
-          <h2>Add a Habit</h2>
+          <h2>{{ habit ? 'Edit Habit' : 'Add a Habit' }}</h2>
           <button class="close-btn" @click="emit('close')">✕</button>
         </div>
 
         <p v-if="saveError" class="save-error" role="alert">{{ saveError }}</p>
 
         <!-- Tabs -->
-        <div class="tabs">
+        <div v-if="!habit" class="tabs">
           <button :class="{ active: tab === 'preset' }" @click="tab = 'preset'">⚡ Quick add</button>
           <button :class="{ active: tab === 'custom' }" @click="tab = 'custom'">✏️ Custom</button>
         </div>
+
+        <fieldset class="schedule-field">
+          <legend>Repeat on</legend>
+          <div class="day-buttons">
+            <button v-for="day in WEEKDAYS" :key="day.value" :aria-pressed="scheduledDays.includes(day.value)" :class="{ selected: scheduledDays.includes(day.value) }" @click="toggleDay(day.value)">{{ day.label }}</button>
+          </div>
+          <p v-if="!scheduledDays.length" role="alert">Choose at least one day.</p>
+          <p v-else-if="habit">Changes apply from today. Earlier schedules are preserved.</p>
+        </fieldset>
 
         <!-- Preset list -->
         <div v-if="tab === 'preset'" class="preset-list">
@@ -64,6 +80,7 @@ function submitCustom() {
             v-for="p in PRESET_HABITS"
             :key="p.name"
             class="preset-item"
+            :disabled="!scheduledDays.length"
             @click="selectPreset(p)"
           >
             <span class="preset-icon">{{ p.icon }}</span>
@@ -116,8 +133,8 @@ function submitCustom() {
             </div>
           </div>
 
-          <button class="submit-btn" :disabled="!name.trim()" @click="submitCustom">
-            Add Habit 🌿
+          <button class="submit-btn" :disabled="!name.trim() || !scheduledDays.length" @click="submitCustom">
+            {{ habit ? 'Save changes' : 'Add Habit 🌿' }}
           </button>
         </div>
       </div>
@@ -340,4 +357,12 @@ function submitCustom() {
 }
 
 .save-error { padding: 0.75rem; margin-bottom: 0.75rem; border-radius: var(--radius-sm); background: #fef2f2; color: #b91c1c; font-size: 0.85rem; }
+
+.schedule-field { border: 0; margin-bottom: 1.25rem; }
+.schedule-field legend { font-weight: 600; font-size: 0.85rem; margin-bottom: 0.5rem; }
+.day-buttons { display: flex; flex-wrap: wrap; gap: 6px; }
+.day-buttons button { min-width: 44px; min-height: 44px; border: 1px solid var(--beige-300); border-radius: var(--radius-sm); background: var(--white); color: var(--text-secondary); }
+.day-buttons button.selected { background: var(--blue-50); color: var(--blue-600); border-color: var(--blue-400); font-weight: 600; }
+.schedule-field p { font-size: 0.78rem; color: var(--text-secondary); margin-top: 0.5rem; }
+.preset-item:disabled { opacity: 0.5; cursor: not-allowed; }
 </style>

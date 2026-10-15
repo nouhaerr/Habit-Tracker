@@ -1,4 +1,5 @@
 import { computed } from 'vue'
+import { scheduledOn } from '../lib/habitSchedule'
 import { localDate } from '../lib/habitDates'
 import type { Habit } from '../types'
 
@@ -21,14 +22,14 @@ export const BADGES: BadgeDef[] = [
   {
     id: 'on_fire',
     name: 'On Fire',
-    description: 'Reach a 7-day streak on any habit',
+    description: 'Reach a 7-completion streak on any habit',
     icon: '🔥',
     check: (habits) => habits.some(h => h.bestStreak >= 7)
   },
   {
     id: 'unstoppable',
     name: 'Unstoppable',
-    description: 'Reach a 30-day streak on any habit',
+    description: 'Reach a 30-completion streak on any habit',
     icon: '⚡',
     check: (habits) => habits.some(h => h.bestStreak >= 30)
   },
@@ -47,7 +48,8 @@ export const BADGES: BadgeDef[] = [
     check: (habits) => {
       if (!habits.length) return false
       const today = localDate()
-      return habits.every(h => h.completedDates.includes(today))
+      const scheduled = habits.filter(h => scheduledOn(h, today))
+      return scheduled.length > 0 && scheduled.every(h => h.completedDates.includes(today))
     }
   },
   {

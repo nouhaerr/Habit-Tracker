@@ -26,7 +26,7 @@ const avgStreak = () => {
       </div>
       <div class="stat-card sage">
         <div class="stat-icon">🔥</div>
-        <div class="stat-value">{{ longestStreak }}d</div>
+        <div class="stat-value">{{ longestStreak }}</div>
         <div class="stat-label">Best streak</div>
       </div>
       <div class="stat-card lavender">
@@ -74,7 +74,7 @@ const avgStreak = () => {
             </div>
             <span class="habit-count">{{ habit.completedDates.length }}x</span>
           </div>
-          <span class="habit-streak">🔥 {{ habit.streak }}d</span>
+          <span class="habit-streak">🔥 {{ habit.streak }}</span>
         </div>
       </div>
     </div>

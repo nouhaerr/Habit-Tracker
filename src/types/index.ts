@@ -5,6 +5,8 @@ export interface Habit {
     category: 'health' | 'dev' | 'mindset' | 'custom'
     color: string
     createdAt: string
+    scheduledDays: number[] // Sunday = 0, Monday = 1, ... Saturday = 6
+    scheduleHistory: { from: string; days: number[] }[]
     completedDates: string[] // 'YYYY-MM-DD'
     streak: number
     bestStreak: number
@@ -26,3 +28,4 @@ export interface Habit {
     completed: number
     total: number
   }
+export type HabitInput = Pick<Habit, 'name' | 'icon' | 'category' | 'color' | 'scheduledDays'>

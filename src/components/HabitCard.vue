@@ -1,14 +1,17 @@
 <script setup lang="ts">
+import { scheduleLabel } from '../lib/habitSchedule'
 import type { Habit } from '../types'
 
 const props = defineProps<{
   habit: Habit & { completedToday: boolean }
+  scheduledToday?: boolean
 }>()
 
 const emit = defineEmits<{
   toggle: [id: string]
   delete: [id: string]
   reminder: [id: string]
+  edit: [id: string]
 }>()
 </script>
 
@@ -23,8 +26,9 @@ const emit = defineEmits<{
         <p class="name" :class="{ done: habit.completedToday }">{{ habit.name }}</p>
         <div class="meta">
           <span class="streak" v-if="habit.streak > 0">
-            🔥 {{ habit.streak }}d streak
+            🔥 {{ habit.streak }} streak
           </span>
+          <span class="schedule">{{ scheduleLabel(habit.scheduledDays) }}</span>
           <span class="category">{{ habit.category }}</span>
           <span class="reminder-badge" v-if="habit.reminderEnabled && habit.reminder">
             ⏰ {{ habit.reminder }}
@@ -35,10 +39,14 @@ const emit = defineEmits<{
 
     <!-- Right: actions -->
     <div class="card-right">
+      <button class="btn-edit" @click="emit('edit', habit.id)" title="Edit habit" aria-label="Edit habit">✏️</button>
       <button class="btn-reminder" @click="emit('reminder', habit.id)" title="Set reminder">⏰</button>
       <button class="btn-delete" @click="emit('delete', habit.id)" title="Delete habit">🗑️</button>
       <button
+        v-if="scheduledToday !== false"
         class="btn-check"
+        :aria-label="habit.completedToday ? 'Undo completion' : 'Complete habit'"
+        :aria-pressed="habit.completedToday"
         :class="{ checked: habit.completedToday }"
         :style="{ borderColor: habit.color, background: habit.completedToday ? habit.color : 'transparent' }"
         @click="emit('toggle', habit.id)"
@@ -144,7 +152,7 @@ const emit = defineEmits<{
   flex-shrink: 0;
 }
 
-.btn-reminder, .btn-delete {
+.btn-edit, .btn-reminder, .btn-delete {
   background: none;
   border: none;
   font-size: 1rem;
@@ -179,11 +187,13 @@ const emit = defineEmits<{
   opacity: 0.7;
 }
 
-.btn-reminder, .btn-delete, .btn-check { min-width: 44px; min-height: 44px; }
+.btn-edit, .btn-reminder, .btn-delete, .btn-check { min-width: 44px; min-height: 44px; }
 @media (max-width: 480px) {
   .card { flex-direction: column; align-items: stretch; padding: 1rem; gap: 0.75rem; }
   .card-right { justify-content: flex-end; }
-  .btn-reminder, .btn-delete { opacity: 0.75; }
+  .btn-edit, .btn-reminder, .btn-delete { opacity: 0.75; }
 }
 
+.btn-edit:hover { opacity: 1; }
+.schedule { font-size: 0.7rem; color: var(--text-secondary); }
 </style>

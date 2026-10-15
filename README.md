@@ -3,7 +3,9 @@
 A soft blue/beige habit tracker built for developers. Vue 3 + Vite + TypeScript + Supabase (Auth + PostgreSQL).
 
 ## Features
-- ✅ Add / delete habits (preset + custom)
+- ✅ Add / edit / delete habits (preset + custom)
+- 📅 Choose weekdays for each habit
+- 🗓️ Monthly progress calendar with habit filters and daily details
 - 🔥 Streak counter with best streak tracking
 - 🏅 8 badges to unlock
 - 📊 Dashboard with weekly chart and per-habit stats
@@ -26,7 +28,7 @@ cp .env.example .env.local
 
 Create a project in [Supabase](https://supabase.com/dashboard), then:
 
-1. Run `supabase/migrations/202610150001_habits.sql` once in **SQL Editor**.
+1. Run the SQL files in `supabase/migrations/` in order, once each, in **SQL Editor**. For an existing installation, run only the new `202610150002_habit_schedules.sql` migration.
 2. Copy the **Project URL** and **Publishable key** from **Connect** into `.env.local`:
 
    ```dotenv
@@ -52,6 +54,8 @@ Each user can access only their own habits through database row-level security. 
 - Vercel hosts the site; Supabase stores the data. Using the same Supabase project lets you access the same account and habits across devices.
 - `vercel.json` supports refreshing `/dashboard` and `/badges` directly.
 
+Schedule changes take effect from today. Previous schedules and completion history are retained for calendar statistics. Streaks count consecutive scheduled completions; rest days do not break them. The calendar is read-only and excludes future days from its monthly completion rate.
+
 ## Checks
 
 ```bash
@@ -72,7 +76,7 @@ src/
   types/
     index.ts                     → Habit, Badge, DailyStats types
   router/
-    index.ts                     → Vue Router (3 routes)
+    index.ts                     → Vue Router (4 routes)
   composables/
     useHabits.ts                 → Habit logic + Supabase storage
     useAuth.ts                   → Session + sign-out
@@ -83,10 +87,11 @@ src/
   components/
     AuthPanel.vue                → Sign-up + sign-in
     HabitCard.vue                → Single habit row
-    AddHabitModal.vue            → Add habit (preset + custom)
+    AddHabitModal.vue            → Add / edit habit + weekday selection
     ReminderModal.vue            → Set reminder time
   views/
     TodayView.vue                → Today's habits + progress
+    CalendarView.vue             → Monthly calendar + daily details
     DashboardView.vue            → Stats + weekly chart
     BadgesView.vue               → All badges
 ```

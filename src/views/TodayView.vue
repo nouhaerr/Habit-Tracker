@@ -6,8 +6,12 @@ import AddHabitModal from '../components/AddHabitModal.vue'
 import ReminderModal from '../components/ReminderModal.vue'
 import type { Habit } from '../types'
 
-const { todayHabits, completedToday, totalToday, completionRate, toggleHabit, addHabit, deleteHabit, updateReminder, habits, saving, error } = useHabits()
+const { todayHabits, completedToday, totalToday, completionRate, toggleHabit, addHabit, deleteHabit, updateReminder, habits, saving, error, updateHabit, today } = useHabits()
 
+import { scheduledOn } from '../lib/habitSchedule'
+const editingId = ref<string | null>(null)
+const editingHabit = computed(() => habits.value.find(h => h.id === editingId.value))
+const offDayHabits = computed(() => habits.value.filter(h => !scheduledOn(h, today.value)).map(h => ({ ...h, completedToday: h.completedDates.includes(today.value) })))
 const showAddModal = ref(false)
 const reminderHabitId = ref<string | null>(null)
 
@@ -27,7 +31,9 @@ const dateLabel = computed(() =>
 )
 
 async function handleAdd(data: Parameters<typeof addHabit>[0]) {
-  if (await addHabit(data)) showAddModal.value = false
+  const saved = editingHabit.value ? await updateHabit(editingHabit.value.id, data) : await addHabit(data)
+  if (saved) { showAddModal.value = false; editingId.value = null }
+
 }
 
 async function handleReminder(time: string, enabled: boolean) {
@@ -45,7 +51,7 @@ async function handleReminder(time: string, enabled: boolean) {
         <h1 class="greeting">{{ greeting }}, Dev! 👋</h1>
         <p class="date">{{ dateLabel }}</p>
       </div>
-      <button class="add-btn" @click="showAddModal = true">+ Add Habit</button>
+      <button class="add-btn" @click="editingId = null; showAddModal = true">+ Add Habit</button>
     </div>
 
     <!-- Progress bar -->
@@ -57,7 +63,8 @@ async function handleReminder(time: string, enabled: boolean) {
       <div class="progress-bar">
         <div class="progress-fill" :style="{ width: completionRate + '%' }" />
       </div>
-      <p class="progress-msg" v-if="completionRate === 100">🎉 Perfect day! You're unstoppable!</p>
+      <p class="progress-msg" v-if="totalToday === 0">🌿 No habits scheduled today.</p>
+      <p class="progress-msg" v-else-if="completionRate === 100">🎉 Perfect day! You're unstoppable!</p>
       <p class="progress-msg" v-else-if="completionRate >= 50">💪 Great momentum, keep going!</p>
       <p class="progress-msg" v-else-if="completionRate > 0">🌱 Good start, you've got this!</p>
       <p class="progress-msg" v-else>🎯 Let's start building great habits!</p>
@@ -66,7 +73,7 @@ async function handleReminder(time: string, enabled: boolean) {
     <!-- Habit list -->
     <div class="habits-section">
       <div class="section-header">
-        <h2>Your Habits</h2>
+        <h2>Scheduled today</h2>
         <span class="badge">{{ totalToday }}</span>
       </div>
 
@@ -75,6 +82,7 @@ async function handleReminder(time: string, enabled: boolean) {
           v-for="habit in todayHabits"
           :key="habit.id"
           :habit="habit"
+          @edit="editingId = $event; showAddModal = true"
           @toggle="toggleHabit"
           @delete="deleteHabit"
           @reminder="reminderHabitId = $event"
@@ -83,14 +91,21 @@ async function handleReminder(time: string, enabled: boolean) {
 
       <div class="empty" v-if="totalToday === 0">
         <p>🌱</p>
-        <p>No habits yet. Add your first one!</p>
-        <button class="add-btn" @click="showAddModal = true">+ Add Habit</button>
+        <p>{{ habits.length ? 'No habits scheduled today. Enjoy your rest day!' : 'No habits yet. Add your first one!' }}</p>
+        <button class="add-btn" @click="editingId = null; showAddModal = true">+ Add Habit</button>
       </div>
     </div>
 
+    <section v-if="offDayHabits.length" class="habits-section off-days">
+      <h2>Other days</h2>
+      <p class="date">You can still edit habits on their rest days.</p>
+      <HabitCard v-for="habit in offDayHabits" :key="habit.id" :habit="habit" :scheduled-today="false"
+        @edit="editingId = $event; showAddModal = true" @delete="deleteHabit" @reminder="reminderHabitId = $event" />
+    </section>
+
     <!-- Modals -->
     <Transition name="scale">
-      <AddHabitModal :save-error="error" :busy="saving" v-if="showAddModal" @add="handleAdd" @close="showAddModal = false" />
+      <AddHabitModal :key="editingId ?? 'new'" :habit="editingHabit" :save-error="error" :busy="saving" v-if="showAddModal" @add="handleAdd" @close="showAddModal = false" />
     </Transition>
 
     <Transition name="scale">
@@ -227,4 +242,6 @@ async function handleReminder(time: string, enabled: boolean) {
   .progress-card { padding: 1rem; }
 }
 
+.off-days { margin-top: 2rem; }
+.off-days h2 { font-size: 1.1rem; }
 </style>
