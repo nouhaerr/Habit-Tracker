@@ -1,181 +1,151 @@
 import { ref, computed, watch } from 'vue'
-import type { Habit, Badge } from '../types'
+import type { Habit } from '../types'
+import { supabase } from '../lib/supabase'
+import { localDate, streaks } from '../lib/habitDates'
+import { useAuth } from './useAuth'
 
-const TODAY = () => new Date().toISOString().split('T')[0]
-
-const DEFAULT_HABITS: Omit<Habit, 'id' | 'createdAt' | 'completedDates' | 'streak' | 'bestStreak'>[] = [
-  { name: 'Make a commit', icon: '💻', category: 'dev', color: '#6B8CFF', reminderEnabled: false },
-  { name: 'Drink 8 glasses of water', icon: '💧', category: 'health', color: '#60C5F1', reminderEnabled: false },
-  { name: 'Take a break every 2h', icon: '🧘', category: 'mindset', color: '#A8D8B9', reminderEnabled: false },
-  { name: 'Read 20 minutes', icon: '📚', category: 'dev', color: '#B8A9E8', reminderEnabled: false },
-  { name: 'Exercise / walk', icon: '🏃', category: 'health', color: '#F4A89A', reminderEnabled: false },
-]
-
-function makeId() {
-  return Math.random().toString(36).slice(2, 10)
+interface HabitRow {
+  id: string; user_id: string; name: string; icon: string; category: Habit['category'];
+  color: string; created_at: string; completed_dates: string[];
+  reminder: string | null; reminder_enabled: boolean
 }
+function fromRow(row: HabitRow): Habit {
+  return {
+    id: row.id, name: row.name, icon: row.icon, category: row.category, color: row.color,
+    createdAt: row.created_at, completedDates: row.completed_dates,
+    reminder: row.reminder?.slice(0, 5), reminderEnabled: row.reminder_enabled,
+    ...streaks(row.completed_dates)
+  }
+}
+const habits = ref<Habit[]>([])
+const loading = ref(false)
+const loaded = ref(false)
+const saving = ref(false)
+const error = ref('')
+const today = ref(localDate())
+const { session } = useAuth()
+let generation = 0
 
-function loadHabits(): Habit[] {
+async function loadHabits() {
+  const userId = session.value?.user.id
+  if (!supabase || !userId) return
+  const request = ++generation
+  loading.value = true
+  error.value = ''
   try {
-    const raw = localStorage.getItem('habitflow_habits')
-    return raw ? JSON.parse(raw) : []
+    const result = await supabase.from('habits').select('*').eq('user_id', userId).order('inserted_at')
+    if (request !== generation) return
+    if (result.error) throw result.error
+    habits.value = (result.data as HabitRow[]).map(fromRow)
+    loaded.value = true
   } catch {
-    return []
+    if (request === generation) error.value = 'Could not load your habits. Check your connection and try again.'
+  } finally {
+    if (request === generation) loading.value = false
+  }
+}
+watch(() => session.value?.user.id, () => {
+  generation++
+  habits.value = []
+  loaded.value = false
+  loading.value = false
+  saving.value = false
+  error.value = ''
+  if (session.value) void loadHabits()
+}, { immediate: true })
+
+async function mutate(action: (userId: string, request: number) => Promise<void>) {
+  const userId = session.value?.user.id
+  if (!supabase || !userId || saving.value || loading.value || !loaded.value) return false
+  const request = generation
+  saving.value = true
+  error.value = ''
+  try {
+    await action(userId, request)
+    return request === generation
+  } catch {
+    if (request === generation) error.value = 'Your change could not be saved. Check your connection and try again.'
+    return false
+  } finally {
+    if (request === generation) saving.value = false
   }
 }
 
-function saveHabits(habits: Habit[]) {
-  localStorage.setItem('habitflow_habits', JSON.stringify(habits))
+function replaceRow(row: HabitRow, userId: string, request: number) {
+  if (session.value?.user.id !== userId || request !== generation) return
+  const index = habits.value.findIndex(h => h.id === row.id)
+  if (index >= 0) habits.value[index] = fromRow(row)
 }
 
-function calcStreak(dates: string[]): number {
-  if (!dates.length) return 0
-  const sorted = [...dates].sort((a, b) => b.localeCompare(a))
-  const today = TODAY()
-  let streak = 0
-  let current = today
-
-  for (const d of sorted) {
-    if (d === current) {
-      streak++
-      const prev = new Date(current)
-      prev.setDate(prev.getDate() - 1)
-      current = prev.toISOString().split('T')[0]
-    } else if (d < current) {
-      break
+// One reminder timer for the whole app, rather than one per mounted view.
+setInterval(() => {
+  today.value = localDate()
+  habits.value = habits.value.map(h => ({ ...h, ...streaks(h.completedDates) }))
+  if (!session.value || !('Notification' in window) || Notification.permission !== 'granted') return
+  const now = new Date()
+  const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+  habits.value.forEach(h => {
+    if (h.reminderEnabled && h.reminder === time && !h.completedDates.includes(today.value)) {
+      new Notification('HabitFlow 🌿', { body: `Don't forget: ${h.icon} ${h.name}` })
     }
-  }
-  return streak
-}
-
-// Global state
-const habits = ref<Habit[]>(loadHabits())
-
-// Seed default habits if empty
-if (habits.value.length === 0) {
-  habits.value = DEFAULT_HABITS.map(h => ({
-    ...h,
-    id: makeId(),
-    createdAt: TODAY(),
-    completedDates: [],
-    streak: 0,
-    bestStreak: 0
-  }))
-  saveHabits(habits.value)
-}
-
-watch(habits, (val) => saveHabits(val), { deep: true })
+  })
+}, 60000)
+window.addEventListener('focus', () => {
+  today.value = localDate()
+  if (session.value && !saving.value && !loading.value) void loadHabits()
+})
 
 export function useHabits() {
-  const today = TODAY()
-
-  const todayHabits = computed(() =>
-    habits.value.map(h => ({
-      ...h,
-      completedToday: h.completedDates.includes(today)
-    }))
-  )
-
-  const completedToday = computed(() =>
-    habits.value.filter(h => h.completedDates.includes(today)).length
-  )
-
+  const todayHabits = computed(() => habits.value.map(h => ({ ...h, completedToday: h.completedDates.includes(today.value) })))
+  const completedToday = computed(() => todayHabits.value.filter(h => h.completedToday).length)
   const totalToday = computed(() => habits.value.length)
-
-  const completionRate = computed(() =>
-    totalToday.value === 0 ? 0 : Math.round((completedToday.value / totalToday.value) * 100)
-  )
-
-  const longestStreak = computed(() =>
-    habits.value.reduce((max, h) => Math.max(max, h.bestStreak), 0)
-  )
-
+  const completionRate = computed(() => totalToday.value ? Math.round(completedToday.value / totalToday.value * 100) : 0)
+  const longestStreak = computed(() => habits.value.reduce((max, h) => Math.max(max, h.bestStreak), 0))
   const weeklyStats = computed(() => {
-    const days: { date: string; label: string; rate: number }[] = []
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date()
-      d.setDate(d.getDate() - i)
-      const date = d.toISOString().split('T')[0]
-      const label = d.toLocaleDateString('en', { weekday: 'short' })
+    // Depend on today's date so this refreshes after midnight.
+    const current = today.value
+    return Array.from({ length: 7 }, (_, index) => {
+      const d = new Date(`${current}T12:00:00`)
+      d.setDate(d.getDate() - (6 - index))
+      const date = localDate(d)
       const completed = habits.value.filter(h => h.completedDates.includes(date)).length
-      const rate = totalToday.value === 0 ? 0 : Math.round((completed / habits.value.length) * 100)
-      days.push({ date, label, rate })
-    }
-    return days
+      return { date, label: d.toLocaleDateString('en', { weekday: 'short' }), rate: totalToday.value ? Math.round(completed / totalToday.value * 100) : 0 }
+    })
   })
 
   function toggleHabit(id: string) {
-    const habit = habits.value.find(h => h.id === id)
-    if (!habit) return
-
-    const idx = habit.completedDates.indexOf(today)
-    if (idx === -1) {
-      habit.completedDates.push(today)
-    } else {
-      habit.completedDates.splice(idx, 1)
-    }
-
-    habit.streak = calcStreak(habit.completedDates)
-    habit.bestStreak = Math.max(habit.bestStreak, habit.streak)
-  }
-
-  function addHabit(data: { name: string; icon: string; category: Habit['category']; color: string; reminder?: string; reminderEnabled: boolean }) {
-    const habit: Habit = {
-      id: makeId(),
-      createdAt: TODAY(),
-      completedDates: [],
-      streak: 0,
-      bestStreak: 0,
-      ...data
-    }
-    habits.value.push(habit)
-  }
-
-  function deleteHabit(id: string) {
-    habits.value = habits.value.filter(h => h.id !== id)
-  }
-
-  function updateReminder(id: string, time: string, enabled: boolean) {
-    const habit = habits.value.find(h => h.id === id)
-    if (!habit) return
-    habit.reminder = time
-    habit.reminderEnabled = enabled
-
-    if (enabled && 'Notification' in window) {
-      Notification.requestPermission()
-    }
-  }
-
-  // Schedule notification check
-  function checkReminders() {
-    if (!('Notification' in window) || Notification.permission !== 'granted') return
-    const now = new Date()
-    const hhmm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
-    const today = TODAY()
-
-    habits.value.forEach(h => {
-      if (h.reminderEnabled && h.reminder === hhmm && !h.completedDates.includes(today)) {
-        new Notification('HabitFlow 🌿', {
-          body: `Don't forget: ${h.icon} ${h.name}`,
-          icon: '/favicon.ico'
-        })
-      }
+    return mutate(async (userId, request) => {
+      const { data, error } = await supabase!.rpc('toggle_habit', { habit_id: id, completion_date: localDate() }).single()
+      if (error || !data) throw error ?? new Error('Habit not found')
+      replaceRow(data as HabitRow, userId, request)
     })
   }
-
-  setInterval(checkReminders, 60000)
-
-  return {
-    habits,
-    todayHabits,
-    completedToday,
-    totalToday,
-    completionRate,
-    longestStreak,
-    weeklyStats,
-    toggleHabit,
-    addHabit,
-    deleteHabit,
-    updateReminder
+  function addHabit(input: { name: string; icon: string; category: Habit['category']; color: string; reminder?: string; reminderEnabled: boolean }) {
+    return mutate(async (userId, request) => {
+      const { data, error } = await supabase!.from('habits').insert({
+        user_id: userId, name: input.name.trim(), icon: input.icon, category: input.category,
+        color: input.color, created_at: localDate(), reminder: input.reminder || null, reminder_enabled: input.reminderEnabled
+      }).select().single()
+      if (error) throw error
+      if (session.value?.user.id === userId && request === generation) habits.value.push(fromRow(data as HabitRow))
+    })
   }
+  function deleteHabit(id: string) {
+    return mutate(async (userId, request) => {
+      const { data, error } = await supabase!.from('habits').delete().eq('id', id).eq('user_id', userId).select('id').single()
+      if (error || !data) throw error ?? new Error('Habit not found')
+      if (session.value?.user.id === userId && request === generation) habits.value = habits.value.filter(h => h.id !== id)
+    })
+  }
+  function updateReminder(id: string, time: string, enabled: boolean) {
+    if (enabled && 'Notification' in window) void Notification.requestPermission()
+    return mutate(async (userId, request) => {
+      const { data, error } = await supabase!.from('habits').update({ reminder: time || null, reminder_enabled: enabled })
+        .eq('id', id).eq('user_id', userId).select().single()
+      if (error) throw error
+      replaceRow(data as HabitRow, userId, request)
+    })
+  }
+  return { habits, todayHabits, completedToday, totalToday, completionRate, longestStreak, weeklyStats,
+    loading, loaded, saving, error, loadHabits, toggleHabit, addHabit, deleteHabit, updateReminder }
 }

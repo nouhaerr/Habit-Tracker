@@ -2,7 +2,7 @@
 import { ref } from 'vue'
 import type { Habit } from '../types'
 
-const props = defineProps<{ habit: Habit }>()
+const props = defineProps<{ habit: Habit; busy?: boolean; saveError?: string }>()
 const emit = defineEmits<{
   save: [time: string, enabled: boolean]
   close: []
@@ -14,13 +14,14 @@ const enabled = ref(props.habit.reminderEnabled)
 
 <template>
   <Teleport to="body">
-    <div class="overlay" @click.self="emit('close')">
-      <div class="modal">
+    <div class="overlay" @click.self="!busy && emit('close')">
+      <div class="modal" :inert="busy" :aria-busy="busy">
         <div class="modal-header">
           <h2>{{ habit.icon }} Reminder</h2>
           <button @click="emit('close')">✕</button>
         </div>
 
+        <p v-if="saveError" class="save-error" role="alert">{{ saveError }}</p>
         <p class="habit-name">{{ habit.name }}</p>
 
         <div class="toggle-row">
@@ -151,4 +152,26 @@ const enabled = ref(props.habit.reminderEnabled)
   transition: all 0.2s;
 }
 .btn-save:hover { background: var(--blue-600); }
+
+.overlay {
+  padding: max(1rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) max(1rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
+}
+.modal {
+  min-width: 0;
+  max-height: calc(100vh - 2rem);
+  max-height: calc(100dvh - max(1rem, env(safe-area-inset-top)) - max(1rem, env(safe-area-inset-bottom)));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+@media (max-width: 480px) {
+  .modal { padding: 1rem; }
+  .time-field input { font-size: 16px; }
+}
+
+
+.habit-name { overflow-wrap: anywhere; }
+.modal-header button { min-width: 44px; min-height: 44px; }
+.toggle { flex-shrink: 0; }
+
+.save-error { padding: 0.75rem; margin-bottom: 0.75rem; border-radius: var(--radius-sm); background: #fef2f2; color: #b91c1c; font-size: 0.85rem; }
 </style>

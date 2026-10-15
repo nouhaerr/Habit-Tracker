@@ -6,7 +6,7 @@ import AddHabitModal from '../components/AddHabitModal.vue'
 import ReminderModal from '../components/ReminderModal.vue'
 import type { Habit } from '../types'
 
-const { todayHabits, completedToday, totalToday, completionRate, toggleHabit, addHabit, deleteHabit, updateReminder, habits } = useHabits()
+const { todayHabits, completedToday, totalToday, completionRate, toggleHabit, addHabit, deleteHabit, updateReminder, habits, saving, error } = useHabits()
 
 const showAddModal = ref(false)
 const reminderHabitId = ref<string | null>(null)
@@ -26,16 +26,14 @@ const dateLabel = computed(() =>
   new Date().toLocaleDateString('en', { weekday: 'long', month: 'long', day: 'numeric' })
 )
 
-function handleAdd(data: Parameters<typeof addHabit>[0]) {
-  addHabit(data)
-  showAddModal.value = false
+async function handleAdd(data: Parameters<typeof addHabit>[0]) {
+  if (await addHabit(data)) showAddModal.value = false
 }
 
-function handleReminder(time: string, enabled: boolean) {
+async function handleReminder(time: string, enabled: boolean) {
   if (reminderHabitId.value) {
-    updateReminder(reminderHabitId.value, time, enabled)
+    if (await updateReminder(reminderHabitId.value, time, enabled)) reminderHabitId.value = null
   }
-  reminderHabitId.value = null
 }
 </script>
 
@@ -92,13 +90,15 @@ function handleReminder(time: string, enabled: boolean) {
 
     <!-- Modals -->
     <Transition name="scale">
-      <AddHabitModal v-if="showAddModal" @add="handleAdd" @close="showAddModal = false" />
+      <AddHabitModal :save-error="error" :busy="saving" v-if="showAddModal" @add="handleAdd" @close="showAddModal = false" />
     </Transition>
 
     <Transition name="scale">
       <ReminderModal
         v-if="reminderHabit"
         :habit="reminderHabit"
+        :busy="saving"
+        :save-error="error"
         @save="handleReminder"
         @close="reminderHabitId = null"
       />
@@ -107,7 +107,7 @@ function handleReminder(time: string, enabled: boolean) {
 </template>
 
 <style scoped>
-.today { max-width: 680px; }
+.today { width: 100%; max-width: 960px; margin-inline: auto; }
 
 .page-header {
   display: flex;
@@ -216,4 +216,15 @@ function handleReminder(time: string, enabled: boolean) {
 }
 
 .empty p:first-child { font-size: 2.5rem; }
+
+.greeting { font-size: clamp(1.25rem, 2.5vw, 1.6rem); overflow-wrap: anywhere; }
+.page-header > div { min-width: 0; }
+.add-btn { min-height: 44px; }
+.progress-info { flex-wrap: wrap; gap: 0.25rem 1rem; }
+@media (max-width: 480px) {
+  .page-header { flex-direction: column; gap: 0.75rem; }
+  .page-header .add-btn { width: 100%; }
+  .progress-card { padding: 1rem; }
+}
+
 </style>

@@ -100,9 +100,7 @@ const emit = defineEmits<{
   font-size: 0.95rem;
   font-weight: 600;
   color: var(--text-primary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
   transition: all 0.2s;
 }
 
@@ -180,4 +178,12 @@ const emit = defineEmits<{
 .btn-check:hover:not(.checked) {
   opacity: 0.7;
 }
+
+.btn-reminder, .btn-delete, .btn-check { min-width: 44px; min-height: 44px; }
+@media (max-width: 480px) {
+  .card { flex-direction: column; align-items: stretch; padding: 1rem; gap: 0.75rem; }
+  .card-right { justify-content: flex-end; }
+  .btn-reminder, .btn-delete { opacity: 0.75; }
+}
+
 </style>

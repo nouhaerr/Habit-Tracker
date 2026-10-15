@@ -47,7 +47,12 @@ html, body {
 ::-webkit-scrollbar-thumb { background: var(--blue-200); border-radius: 99px; }
 
 button { font-family: inherit; cursor: pointer; }
-input, select { font-family: inherit; }
+input, select { font-family: inherit; min-width: 0; max-width: 100%; }
+
+#app { min-height: 100vh; min-height: 100dvh; }
+img, svg { max-width: 100%; }
+button, a, input, select { -webkit-tap-highlight-color: transparent; }
+:focus-visible { outline: 2px solid var(--blue-600); outline-offset: 3px; }
 
 /* Transitions */
 .fade-enter-active, .fade-leave-active { transition: opacity 0.2s ease; }

@@ -34,7 +34,7 @@ const { badges, earnedCount } = useBadges(habits)
           <p class="badge-name">{{ badge.name }}</p>
           <p class="badge-desc">{{ badge.description }}</p>
           <span class="badge-status" v-if="badge.earned">✓ Earned</span>
-          <span class="badge-status locked" v-else">In progress...</span>
+          <span class="badge-status locked" v-else>In progress...</span>
         </div>
       </div>
     </div>
@@ -42,7 +42,7 @@ const { badges, earnedCount } = useBadges(habits)
 </template>
 
 <style scoped>
-.badges-page { max-width: 680px; }
+.badges-page { width: 100%; max-width: 1120px; margin-inline: auto; }
 
 .page-header { margin-bottom: 1rem; }
 .page-header h1 {
@@ -82,7 +82,7 @@ const { badges, earnedCount } = useBadges(habits)
 
 .badges-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
   gap: 1rem;
 }
 
@@ -144,4 +144,10 @@ const { badges, earnedCount } = useBadges(habits)
 @media (max-width: 480px) {
   .badges-grid { grid-template-columns: 1fr; }
 }
+
+.badge-name, .badge-desc { overflow-wrap: anywhere; }
+@media (max-width: 480px) {
+  .badge-card { padding: 1rem; gap: 0.75rem; }
+}
+
 </style>

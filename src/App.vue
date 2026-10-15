@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { RouterView, RouterLink, useRoute } from 'vue-router'
-import { computed } from 'vue'
+import AuthPanel from './components/AuthPanel.vue'
+import { useAuth } from './composables/useAuth'
 import { useHabits } from './composables/useHabits'
 
 const route = useRoute()
-const { completionRate } = useHabits()
+const { completionRate, loading, loaded, saving, error, loadHabits } = useHabits()
+const { session, ready, authError, signOut } = useAuth()
 
 const navItems = [
   { path: '/', label: "Today's Habits", icon: '🌿' },
@@ -14,7 +16,9 @@ const navItems = [
 </script>
 
 <template>
-  <div class="app">
+  <div v-if="!ready" class="session-loading" role="status">Restoring your session…</div>
+  <AuthPanel v-else-if="!session" :session-error="authError" />
+  <div v-else class="app">
     <!-- Sidebar -->
     <aside class="sidebar">
       <div class="brand">
@@ -79,11 +83,24 @@ const navItems = [
 
     <!-- Main -->
     <main class="main">
+      <div class="account-bar">
+        <span class="account-email">{{ session.user.email }}</span>
+        <span v-if="saving" role="status">Saving…</span>
+        <button :disabled="saving || loading" @click="signOut">Sign out</button>
+      </div>
+      <p v-if="authError" class="data-error" role="alert">{{ authError }}</p>
+      <div v-if="error" class="data-error" role="alert">
+        <span>{{ error }}</span>
+        <button :disabled="saving || loading" @click="loadHabits">Reload habits</button>
+      </div>
+      <p v-if="loading" class="data-status" role="status">Loading your habits…</p>
+      <div v-if="loaded" :inert="saving || loading">
       <RouterView v-slot="{ Component }">
         <Transition name="fade" mode="out-in">
           <component :is="Component" />
         </Transition>
       </RouterView>
+      </div>
     </main>
   </div>
 </template>
@@ -92,6 +109,7 @@ const navItems = [
 .app {
   display: flex;
   min-height: 100vh;
+  min-height: 100dvh;
 }
 
 /* ── Sidebar ── */
@@ -106,6 +124,7 @@ const navItems = [
   top: 0; left: 0; bottom: 0;
   z-index: 10;
   box-shadow: var(--shadow-sm);
+  overflow-y: auto;
 }
 
 .brand {
@@ -199,8 +218,10 @@ const navItems = [
 .main {
   flex: 1;
   margin-left: 240px;
-  padding: 2rem;
+  min-width: 0;
+  padding: clamp(1.25rem, 3vw, 3rem);
   min-height: 100vh;
+  min-height: 100dvh;
   background: var(--beige-50);
 }
 
@@ -212,7 +233,7 @@ const navItems = [
   background: var(--white);
   border-top: 1px solid var(--beige-200);
   z-index: 10;
-  padding: 0.5rem;
+  padding: 0.5rem max(0.5rem, env(safe-area-inset-right)) calc(0.5rem + env(safe-area-inset-bottom)) max(0.5rem, env(safe-area-inset-left));
   justify-content: space-around;
 }
 
@@ -224,7 +245,10 @@ const navItems = [
   text-decoration: none;
   color: var(--text-muted);
   font-size: 0.7rem;
-  padding: 0.4rem 1rem;
+  flex: 1;
+  min-width: 0;
+  min-height: 48px;
+  padding: 0.4rem 0.25rem;
   border-radius: var(--radius-sm);
   transition: all 0.2s;
 }
@@ -234,7 +258,17 @@ const navItems = [
 
 @media (max-width: 768px) {
   .sidebar { display: none; }
-  .main { margin-left: 0; padding: 1rem 1rem 5rem; }
+  .main {
+    margin-left: 0;
+    padding: max(1rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) calc(6rem + env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
+  }
   .mobile-nav { display: flex; }
 }
+
+.session-loading { min-height: 100dvh; display: grid; place-items: center; padding: 1rem; }
+.account-bar { max-width: 1120px; margin: 0 auto 1.5rem; display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 0.75rem; font-size: 0.8rem; color: var(--text-secondary); }
+.account-email { min-width: 0; overflow-wrap: anywhere; margin-right: auto; }
+.account-bar button, .data-error button { min-height: 44px; padding: 0.5rem 0.75rem; border: 1px solid var(--beige-300); border-radius: var(--radius-sm); background: var(--white); color: var(--text-primary); }
+.data-error { max-width: 1120px; margin: 0 auto 1rem; padding: 1rem; border-radius: var(--radius-sm); color: #b91c1c; background: #fef2f2; display: flex; align-items: center; flex-wrap: wrap; gap: 0.75rem; }
+.data-status { max-width: 1120px; margin: 0 auto 1rem; }
 </style>

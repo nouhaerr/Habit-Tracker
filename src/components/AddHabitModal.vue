@@ -2,6 +2,8 @@
 import { ref } from 'vue'
 import type { Habit } from '../types'
 
+defineProps<{ busy?: boolean; saveError?: string }>()
+
 const emit = defineEmits<{
   add: [data: { name: string; icon: string; category: Habit['category']; color: string; reminderEnabled: boolean }]
   close: []
@@ -41,12 +43,14 @@ function submitCustom() {
 
 <template>
   <Teleport to="body">
-    <div class="overlay" @click.self="emit('close')">
-      <div class="modal">
+    <div class="overlay" @click.self="!busy && emit('close')">
+      <div class="modal" :inert="busy" :aria-busy="busy">
         <div class="modal-header">
           <h2>Add a Habit</h2>
           <button class="close-btn" @click="emit('close')">✕</button>
         </div>
+
+        <p v-if="saveError" class="save-error" role="alert">{{ saveError }}</p>
 
         <!-- Tabs -->
         <div class="tabs">
@@ -311,4 +315,29 @@ function submitCustom() {
 }
 
 .submit-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.overlay {
+  padding: max(1rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) max(1rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
+}
+.modal {
+  min-width: 0;
+  max-height: calc(100vh - 2rem);
+  max-height: calc(100dvh - max(1rem, env(safe-area-inset-top)) - max(1rem, env(safe-area-inset-bottom)));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+@media (max-width: 480px) {
+  .modal { padding: 1rem; }
+  .field input, .field select { font-size: 16px; }
+}
+
+
+.preset-name { min-width: 0; overflow-wrap: anywhere; }
+.preset-icon, .preset-cat { flex-shrink: 0; }
+.close-btn, .icon-btn { min-width: 44px; min-height: 44px; }
+@media (max-width: 480px) {
+  .preset-item { gap: 8px; padding: 0.75rem; }
+}
+
+.save-error { padding: 0.75rem; margin-bottom: 0.75rem; border-radius: var(--radius-sm); background: #fef2f2; color: #b91c1c; font-size: 0.85rem; }
 </style>

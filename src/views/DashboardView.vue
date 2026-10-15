@@ -82,7 +82,7 @@ const avgStreak = () => {
 </template>
 
 <style scoped>
-.dashboard { max-width: 780px; }
+.dashboard { width: 100%; max-width: 1120px; margin-inline: auto; }
 
 .page-header { margin-bottom: 1.5rem; }
 .page-header h1 {
@@ -94,7 +94,7 @@ const avgStreak = () => {
 
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 1rem;
   margin-bottom: 1.5rem;
 }
@@ -212,7 +212,23 @@ const avgStreak = () => {
 .habit-streak { font-size: 0.78rem; color: #F97316; font-weight: 600; white-space: nowrap; }
 
 @media (max-width: 480px) {
-  .stats-grid { grid-template-columns: 1fr 1fr; }
-  .habit-bars { width: 90px; }
+  .stat-card { padding: 1rem 0.75rem; }
+  .stat-value { font-size: clamp(1.25rem, 6vw, 1.8rem); }
+  .chart-card, .habits-stats { padding: 1rem; }
+  .chart { gap: 4px; }
+  .habit-stat-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 6px 10px; }
+  .habit-name { white-space: normal; overflow-wrap: anywhere; }
+  .habit-bars { grid-column: 2 / -1; grid-row: 2; width: 100%; min-width: 0; }
+  .habit-streak { grid-column: 3; grid-row: 1; }
 }
+
+.stat-card, .chart-col { min-width: 0; }
+.stat-value { overflow-wrap: anywhere; }
+@media (min-width: 481px) and (max-width: 1100px) {
+  .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 480px) {
+  .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; }
+}
+
 </style>

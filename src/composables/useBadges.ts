@@ -1,4 +1,5 @@
 import { computed } from 'vue'
+import { localDate } from '../lib/habitDates'
 import type { Habit } from '../types'
 
 export interface BadgeDef {
@@ -45,7 +46,7 @@ export const BADGES: BadgeDef[] = [
     icon: '⭐',
     check: (habits) => {
       if (!habits.length) return false
-      const today = new Date().toISOString().split('T')[0]
+      const today = localDate()
       return habits.every(h => h.completedDates.includes(today))
     }
   },
